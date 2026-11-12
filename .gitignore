@@ -2,3 +2,7 @@ __pycache__/
 *.pyc
 data/
 data_neu/
+*.db
+*.npz
+.idea/
+.pytest_cache/
