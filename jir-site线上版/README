@@ -1,0 +1,79 @@
+Jir-Site 线上部署实操指南 (Deployment Guide)
+本项目已成功适配云沙箱环境并完成托管上线。本文档完整记录了从本地代码到线上运行的实操步骤与关键踩坑经验。
+
+📂 阶段一：准备最小化运行集
+创建一个名为 线上版 的干净目录。线上环境不需要测试文件、历史评估记录，仅保留运行所需的最小子集：
+
+text
+线上版/
+├── jir_site_api.py      # 复制自原工作目录
+├── jir_site_embed.py    # 复制自原工作目录
+├── 情报站.db            # 现成的 SQLite 数据（沙箱无 pandas，不现场建库）
+├── jd_vectors.npz       # 预生成的向量库
+├── model/               # 待填入的本地化 BGE 模型（见阶段二）
+└── requirements.txt     # 沙箱依赖清单
+🧠 阶段二：模型本地化（解决软链接陷阱）
+云沙箱外网不稳定，必须将 SentenceTransformer 模型打包带走，但千万不能直接复制 HuggingFace 的缓存目录（因为缓存里全是大小为 0KB 的 .symlink 软链接，复制过去模型会加载失败）。
+
+1. 写一个导出脚本
+在 线上版 目录下，新建一个临时文件 export_model.py：
+
+python
+from sentence_transformers import SentenceTransformer
+
+# 1. 借用本地缓存在线加载一次模型
+model = SentenceTransformer("BAAI/bge-small-zh-v1.5")
+
+# 2. 强制导出真实权重文件到 model 文件夹
+# 这个 save 方法会自动解引用软链接，并自动适配当前库版本的配置文件格式
+model.save("model")
+2. 运行脚本并验证
+bash
+D:\python\pythonpreservation\python.exe export_model.py
+运行后，去 线上版/model/ 看一眼，里面的 model.safetensors 大小应该是 95MB 左右（绝不能是 0KB）。验证无误后，删除 export_model.py。
+
+3. 修改代码
+打开 线上版 里的 jir_site_api.py 和 jir_site_embed.py：
+
+删除关于镜像配置的 os.environ["HF_ENDPOINT"] = ...。
+
+将加载模型代码改为相对路径：
+
+python
+model = SentenceTransformer("model")
+📝 阶段三：配置依赖清单
+在 线上版 根目录下新建 requirements.txt：
+
+text
+fastapi
+uvicorn
+sentence-transformers
+numpy
+openai
+🚀 阶段四：本地模拟预演（上线前必做）
+云平台会通过环境变量注入 $PORT，并使用反向代理。我们需要在本地模拟这个条件，防止线上 502 报错：
+
+cmd
+# 1. 进入部署目录
+cd /d "E:\Aaaaaaa.Item\Item--Job Information Report\Jir-Site\线上版"
+
+# 2. 模拟云平台注入端口环境变量 (Windows 写法)
+set PORT=8123
+
+# 3. 启动服务（注意必须监听 0.0.0.0）
+D:\python\pythonpreservation\python.exe -m uvicorn jir_site_api:app --host 0.0.0.0 --port 8123
+预演验收标准：在浏览器/终端中测试以下接口，确保全部返回 200 OK：
+
+GET /docs（文档渲染）
+
+GET /jobs?limit=3（数据库加载联通）
+
+GET /jobs/semantic?query=机器视觉（模型推理与向量加载联通）
+
+☁️ 阶段五：云端部署与发布
+将整个 线上版 文件夹上传至云托管平台（如 Render / Railway）。
+
+设置平台启动命令（Start Command）：
+uvicorn jir_site_api:app --host 0.0.0.0 --port $PORT
+
+线上安全与优雅降级：不配置 DeepSeek Key，验证 /ask 接口是否正常返回 503 及提示信息。保留 /docs 供在线测试语义检索。
