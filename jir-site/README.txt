@@ -1,3 +1,0 @@
-3. Jir-Site 岗位情报站后端 (FastAPI + RAG)
-做了什么：开发了一套全链路的岗位情报 API 服务。底层用 Pandas 和 SQLite 搭建全量数据导入管道；中间层利用 BGE 模型（SentenceTransformer）将岗位 JD 向量化并存入本地 NPZ 库，实现毫秒级的语义检索（打破了传统关键词死板匹配的局限）；上层接入 DeepSeek API 实现 RAG 问答。核心亮点：设计了严格的 Prompt 防幻觉机制（带编号溯源、拒答无资料问题），并实现了 A/B 控制变量测试与边界防崩溃的全套 Pytest 单元测试。
-AI 参与程度：高度辅助（约 70% 代码由 AI 生成）。AI 负责了基础 CRUD 路由、Pydantic 校验模型的拼装、SQL/向量检索的底层实现以及 pytest 用例编写。我本人负责整体架构设计、业务逻辑串联、Prompt 的防幻觉调优、Windows 环境（国内镜像/文件占用）的踩坑与修复，以及控制变量测试方案的设计。
