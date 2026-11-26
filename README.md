@@ -4,10 +4,12 @@
 
 ## 在线体验
 
-Jir-Site 已部署上线，可直接访问：
+Jir-Site 已双线部署上线：
 
-- 首页（API 欢迎页）：https://job-intel-rag.app.workbuddy.host/?sharecode=PP7HFLNZRJ
-- 交互式文档（Swagger UI，可在网页上直接调试每个接口）：https://job-intel-rag.app.workbuddy.host/docs?sharecode=PP7HFLNZRJ
+- **托管平台版**（可直接访问）：
+  - 首页（API 欢迎页）：https://job-intel-rag.app.workbuddy.host/?sharecode=PP7HFLNZRJ
+  - 交互式文档（Swagger UI，可在网页上直接调试每个接口）：https://job-intel-rag.app.workbuddy.host/docs?sharecode=PP7HFLNZRJ
+- **自有云服务器版**：部署在自购的腾讯云轻量服务器（Ubuntu 24.04）上，nginx 反向代理 + systemd 守护 + SSH 密钥登录/禁密码认证，完整运维过程见下方部署段。该实例私用，IP 不公开。
 
 线上可用接口：`GET /jobs`（四参过滤）、`GET /jobs/{id}`、`GET /jobs/semantic`（语义检索）、`POST /jobs/ask`（RAG 问答）。
 
@@ -21,7 +23,11 @@ Jir-Site 已部署上线，可直接访问：
 
 **Jir-Site 岗位情报站后端（FastAPI + RAG）**：开发了一套全链路的岗位情报 API 服务。底层用 Pandas 和 SQLite 搭建全量数据导入管道；中间层利用 BGE 模型将岗位 JD 向量化并存入本地 NPZ 库，实现毫秒级的语义检索（打破了传统关键词死板匹配的局限）；上层接入 DeepSeek API 实现 RAG 问答。核心亮点：设计了严格的 Prompt 防幻觉机制（带编号溯源、拒答无资料问题），并实现了 A/B 控制变量测试与边界防崩溃的全套 Pytest 单元测试。
 
-部署是这个项目的最后一环，踩坑也最密集：云沙箱启动命令不展开 `$PORT`（改用 Python 进程内读环境变量）；torch 在弱配沙箱加载超过健康检查60秒窗口（改为懒加载仍不行，最终把 BGE 模型导出为 ONNX，用 onnxruntime 推理，导入约1秒，与原模型输出对齐验证余弦相似度=1.000000）；数据库改用相对路径避免线上找不到文件。完整踩坑记录见 `jir-site线上版/README`。
+部署是这个项目的最后一环，分两条线踩坑：
+
+**托管平台线**：云沙箱启动命令不展开 `$PORT`（改用 Python 进程内读环境变量）；torch 在弱配沙箱加载超过健康检查60秒窗口（改为懒加载仍不行，最终把 BGE 模型导出为 ONNX，用 onnxruntime 推理，导入约1秒，与原模型输出对齐验证余弦相似度=1.000000）；数据库改用相对路径避免线上找不到文件。完整踩坑记录见 `jir-site线上版/README`。
+
+**云服务器线（Linux运维）**：自购腾讯云轻量服务器手动部署——SSH 密钥登录并禁用密码认证（密码爆破失效）；FastAPI 交给 systemd 守护（kill 进程3秒自动拉活、开机自启实测验证）；nginx 反向代理统一走80端口，应用3000收回内网；journalctl 日志里可见上线15分钟即被扫描器探测 `GET /.env` 的完整记录；SSH 连续密码输错触发防暴力封禁，重启光猫换公网 IP 绕开。架构：浏览器 → nginx:80 → 127.0.0.1:3000 FastAPI（systemd） → SQLite/向量库/ONNX模型。
 
 ## 本地运行 Jir-Site
 
@@ -48,4 +54,4 @@ setx DEEPSEEK_API_KEY <你的key>
 
 ## AI 参与程度（如实标注）
 
-我主要参与岗位数据采集、脚本理解与调试，以及图表和报告核对；岗位项目的主体代码由 AI agent 编写。NEU 项目基于 agent 模板完成训练，我亲自调整参数并记录结果，网络结构并非原创设计。Jir-Site 项目约70%代码由 AI 生成，AI 负责基础 CRUD 路由、Pydantic 校验模型的拼装、SQL/向量检索的底层实现；我负责整体架构设计、业务逻辑串联、Prompt 的防幻觉调优、Windows 环境（国内镜像/文件占用）的踩坑与修复，以及控制变量测试方案的设计。部署环节的 ONNX 迁移方案由 AI 提出，我完成了导出脚本的编写、对齐验证和线上部署实操。目前岗位分析只有30条样本，适合展示流程和观察趋势；NEU 项目尚未使用预训练模型或数据增强，仍存在过拟合风险，结果还有改进空间。
+我主要参与岗位数据采集、脚本理解与调试，以及图表和报告核对；岗位项目的主体代码由 AI agent 编写。NEU 项目基于 agent 模板完成训练，我亲自调整参数并记录结果，网络结构并非原创设计。Jir-Site 项目约70%代码由 AI 生成，AI 负责基础 CRUD 路由、Pydantic 校验模型的拼装、SQL/向量检索的底层实现；我负责整体架构设计、业务逻辑串联、Prompt 的防幻觉调优、Windows 环境（国内镜像/文件占用）的踩坑与修复，以及控制变量测试方案的设计。部署环节：托管平台的 ONNX 迁移方案由 AI 提出，我完成导出脚本、对齐验证和部署实操；云服务器部署由 AI 设计单元和给步骤，SSH/systemd/nginx/防火墙全部命令由我亲手敲入并完成排障（防暴力封禁、换 IP 绕开）。目前岗位分析只有30条样本，适合展示流程和观察趋势；NEU 项目尚未使用预训练模型或数据增强，仍存在过拟合风险，结果还有改进空间。
